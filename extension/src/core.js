@@ -523,6 +523,51 @@ const CTM = (() => {
     return added;
   }
 
+  // ── Tags for one card being imported (used by other extensions) ──
+
+  /**
+   * Sort a new card's tags against the dictionary, without dropping any:
+   *   canonical  tags a canonical claims, as that canonical, plus their implications
+   *   other      every other tag, cleaned by standardizeTag
+   * Removed and too-long rules are not applied, and combined tags are not
+   * split, so the caller decides what happens to `other`.
+   * @returns {{canonical: string[], other: string[]}}
+   */
+  function mapImportTags(tags, dict) {
+    const lookup = buildLookup(dict);
+    const canonical = [];
+    const other = [];
+    const seen = new Set();
+    const push = (list, tag) => {
+      const key = foldTag(tag);
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      list.push(tag);
+    };
+    const leftovers = [];
+    for (const raw of Array.isArray(tags) ? tags : []) {
+      if (typeof raw !== "string" || !raw.trim()) continue;
+      const match = lookup.get(norm(raw));
+      if (match) {
+        push(canonical, match);
+        continue;
+      }
+      const clean = standardizeTag(raw) || raw.trim();
+      const cleanMatch = lookup.get(norm(clean));
+      if (cleanMatch) push(canonical, cleanMatch);
+      else leftovers.push(clean);
+    }
+    const implies = {};
+    for (const [name, targets] of Object.entries(dict.implications)) {
+      if (name in dict.mapping) implies[name] = targets.map((t) => lookup.get(norm(t)) ?? t.trim());
+    }
+    const blocked = new Set(dict.removedTags.map(norm));
+    for (const tag of expandImplications([...canonical], implies, blocked)) push(canonical, tag);
+    // After the canonicals, so a tidied tag never duplicates one
+    for (const tag of leftovers) push(other, tag);
+    return { canonical, other };
+  }
+
   // ── Apply plan ──
 
   /**
@@ -933,6 +978,7 @@ const CTM = (() => {
     scanCards,
     bucketize,
     expandImplications,
+    mapImportTags,
     planApply,
     trimEdit,
     buildBackup,

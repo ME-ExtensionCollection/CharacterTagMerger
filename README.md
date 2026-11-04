@@ -14,6 +14,7 @@ It is a port of the SillyTavern [Character Tag Merger](https://github.com/Enchan
 - **Auto-filtering.** **Standardize unassigned** strips emoji and `#`, trims spaces, and Title Cases all-lowercase tags. **Auto-remove tags longer than N** sends sentence-length tags to Removed. Tags that a canonical claims are always kept.
 - **Split combined tags.** A tag like `cold, sarcastic, tattoo artist` (several tags typed as one) is replaced by its pieces on Apply. Splitting happens only on `,` `;` `|` and line breaks, so `Hurt/Comfort` and `Dungeons & Dragons` stay whole. Each piece that matches a canonical becomes that canonical, and other pieces are added as new tags. Pieces on the Removed list, over the length limit, or one character long are dropped. The **Split** tab shows each combined tag and what it becomes. To keep a combined tag whole, map it to a canonical or move it to Removed.
 - **Skip Removed.** With this on, Apply only renames, merges and splits, and nothing is removed.
+- **Tidy tags on import.** Other extensions on the page can use the dictionary read-only through `window.marinaraTagMerger.mapTags(tags)`. Char Importer's **Merge with Tag Merger canonicals** option uses it, so new cards arrive with canonical tags (plus implications) and other tags standardized. Removed tags are not dropped there.
 - **Clean Characters panel tag list.** With **Characters panel: canonical tags only** on (the default), the **Tags (N)** list in Marinara's Characters panel shows only tags spelled exactly like a canonical, plus any tag you are currently filtering by. The toggle shows how many are left, e.g. `Tags (2389) · 265 canonical`. This only changes what the list shows: no card is touched. Variant spellings stay hidden until Apply renames them. With an empty dictionary nothing is hidden. Persona tags, library cards and the character editor are not affected.
 - **Import / export.** Uses the SillyTavern extension's `ctm-tag-mapping` JSON, optionally with your unassigned tags so an AI can sort them (see [`tags.md`](tags.md)).
 - **Dictionary cleanup and category manager.** Cleanup drops redundant variant spellings and reports likely duplicate canonicals. The manager reorders, renames and deletes categories.
@@ -73,6 +74,7 @@ npm run dev       # dev harness at http://localhost:5178 with a mock Marinara
   - `src/core.js`: pure tag logic. Normalization, buckets, dictionary edits, the apply plan, import/export, cleanup, and a port of Marinara's `applyCharacterTagEdit`.
   - `src/api.js`: the three Marinara routes used: `GET /api/characters/catalog`, `POST /api/characters/bulk-tags`, and `PATCH /api/characters/:id` (Restore only).
   - `src/store.js`: saved dictionary and options. It never writes before it has read the saved data.
+  - `src/share.js`: `window.marinaraTagMerger`, the read-only API for other extensions.
   - `src/shelf.js`: marks non-canonical chips in Marinara's Characters panel tag list so `extension.css` can hide them.
   - `src/ui.js`, `src/main.js`, `extension.css`: the editor overlay and the top-bar launcher.
 - `test/`: `node:test` suites.

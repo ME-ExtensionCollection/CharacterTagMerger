@@ -432,3 +432,30 @@ describe("dictionary cleanup", () => {
     eq(Object.keys(dict.mapping), ["Sci-Fi", "SciFi", "sci fi"]);
   });
 });
+
+describe("mapImportTags", () => {
+  const dict = dictWith(
+    { Female: ["fem", "woman"], "Demi-Human": ["demihuman"], Elf: [], "Dark Elf": ["drow"], Fantasy: [] },
+    { removedTags: ["junk tag"], implications: { "Dark Elf": ["Elf"], Elf: ["Fantasy"] } },
+  );
+
+  it("maps variants and spellings onto canonicals", () => {
+    eq(CTM.mapImportTags(["#female", "WOMAN", "demihuman"], dict), { canonical: ["Female", "Demi-Human"], other: [] });
+  });
+
+  it("standardizes tags no canonical claims", () => {
+    eq(CTM.mapImportTags(["dark knight", "🔥 #cozy", "NSFW"], dict), { canonical: [], other: ["Dark Knight", "Cozy", "NSFW"] });
+  });
+
+  it("adds implications through chains", () => {
+    eq(CTM.mapImportTags(["drow"], dict), { canonical: ["Dark Elf", "Elf", "Fantasy"], other: [] });
+  });
+
+  it("keeps Removed tags (tidied) instead of dropping them", () => {
+    eq(CTM.mapImportTags(["junk tag"], dict), { canonical: [], other: ["Junk Tag"] });
+  });
+
+  it("matches a canonical after standardizing and dedupes", () => {
+    eq(CTM.mapImportTags(["💕 fem", "Female", "cozy", "Cozy", "", 3], dict), { canonical: ["Female"], other: ["Cozy"] });
+  });
+});

@@ -15,6 +15,7 @@
       "src/store.js",
       "src/shelf.js",
       "src/ui.js",
+      "src/share.js",
       "src/main.js"
     ],
     "cssPath": "extension.css"
