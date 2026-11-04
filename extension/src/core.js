@@ -183,12 +183,13 @@ const CTM = (() => {
 
   /**
    * norm -> canonical. A canonical's own name always beats a variant listed
-   * elsewhere; between two variants the first canonical in mapping order wins.
+   * elsewhere. Between two variants the canonical listed last wins, the same
+   * as the SillyTavern extension, so an imported dictionary matches the same way.
    */
   function buildLookup(dict) {
     const lookup = new Map();
     for (const [canonical, variants] of Object.entries(dict.mapping)) {
-      for (const v of variants) if (!lookup.has(norm(v))) lookup.set(norm(v), canonical);
+      for (const v of variants) lookup.set(norm(v), canonical);
     }
     for (const canonical of Object.keys(dict.mapping)) lookup.set(norm(canonical), canonical);
     return lookup;
@@ -199,18 +200,24 @@ const CTM = (() => {
     return Object.keys(dict.mapping).find((c) => norm(c) === key) ?? null;
   }
 
-  /** Spellings claimed by more than one canonical (or by a canonical and a variant elsewhere). */
+  /**
+   * Spellings listed under more than one canonical. `winner` is the canonical
+   * that actually gets the tag; the entries under the others never match.
+   */
   function findConflicts(dict) {
-    const owners = new Map();
+    const owners = new Map(); // norm -> { spelling, canonicals: Set }
     for (const [canonical, variants] of Object.entries(dict.mapping)) {
       for (const t of [canonical, ...variants]) {
         const key = norm(t);
-        if (!owners.has(key)) owners.set(key, new Set());
-        owners.get(key).add(canonical);
+        if (!owners.has(key)) owners.set(key, { spelling: t, canonicals: new Set() });
+        owners.get(key).canonicals.add(canonical);
       }
     }
+    const lookup = buildLookup(dict);
     const conflicts = [];
-    for (const [key, set] of owners) if (set.size > 1) conflicts.push({ key, canonicals: [...set] });
+    for (const [key, { spelling, canonicals }] of owners) {
+      if (canonicals.size > 1) conflicts.push({ key, spelling, canonicals: [...canonicals], winner: lookup.get(key) });
+    }
     return conflicts;
   }
 
@@ -782,12 +789,24 @@ const CTM = (() => {
       byKey.get(key).push(canonical);
     }
     const duplicates = [...byKey.values()].filter((names) => names.length > 1);
-    return { variantPlans, prunedRemoved, duplicates, conflicts: findConflicts(dict) };
+    // Entries that lose a conflict never match anything, so dropping them is safe.
+    const conflicts = findConflicts(dict);
+    const conflictFixes = [];
+    for (const c of conflicts) {
+      for (const canonical of c.canonicals) {
+        if (canonical === c.winner) continue;
+        for (const v of dict.mapping[canonical]) if (norm(v) === c.key) conflictFixes.push({ canonical, tag: v, winner: c.winner });
+      }
+    }
+    return { variantPlans, prunedRemoved, duplicates, conflicts, conflictFixes };
   }
 
   function applyCleanup(dict, plan) {
     for (const { canonical, cleaned } of plan.variantPlans) {
       if (canonical in dict.mapping) dict.mapping[canonical] = [...cleaned];
+    }
+    for (const { canonical, tag } of plan.conflictFixes ?? []) {
+      if (canonical in dict.mapping) dict.mapping[canonical] = dict.mapping[canonical].filter((v) => v !== tag);
     }
     const pruned = new Set(plan.prunedRemoved);
     dict.removedTags = dict.removedTags.filter((t) => !pruned.has(t));

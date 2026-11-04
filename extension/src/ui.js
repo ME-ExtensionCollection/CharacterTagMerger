@@ -298,6 +298,8 @@ const ctmUi = (() => {
 
   const diffRow = (from, to, count) =>
     h("div", { class: "ctm-diff" }, h("del", { text: from }), " → ", h("ins", { text: to }), count !== undefined ? h("span", { class: "ctm-count", text: `×${count}` }) : null);
+  const conflictRow = (c) =>
+    h("div", { class: "ctm-diff" }, h("b", { text: c.spelling }), ": ", c.canonicals.map((name, i) => [i ? ", " : "", name === c.winner ? h("ins", { text: `${name} (wins)` }) : h("del", { text: name })]));
   const tagRow = (tag, count, kind = "") => h("div", { class: `ctm-diff ${kind}` }, h("span", { text: tag }), count !== undefined ? h("span", { class: "ctm-count", text: `×${count}` }) : null);
 
   // ── State ──
@@ -839,7 +841,7 @@ const ctmUi = (() => {
         parsed.skipped ? h("p", { class: "ctm-warn", text: `${plural(parsed.skipped, "malformed entry", "malformed entries")} skipped.` }) : null,
         section(`New canonicals (${diff.added.length})`, diff.added.map((c) => tagRow(c))),
         section(`Canonicals not in the file (${diff.dropped.length})`, diff.dropped.map((c) => tagRow(c, undefined, "ctm-diff--del"))),
-        section(`Spellings claimed by two canonicals (${parsed.conflicts.length}); the first one wins`, parsed.conflicts.map((c) => tagRow(`${c.key} → ${c.canonicals.join(" / ")}`))),
+        section(`Tags listed under two canonicals (${parsed.conflicts.length}). The one listed last gets the tag, as in SillyTavern; Tools → Clean up dictionary removes the extra entries.`, parsed.conflicts.map(conflictRow)),
         section(`Implications skipped: not a canonical (${parsed.impliesDropped.length})`, parsed.impliesDropped.map((c) => tagRow(c))),
         hasCurrent ? h("p", { class: "ctm-muted", text: "Your current dictionary is downloaded first, so you can import it back." }) : null,
       ],
@@ -856,11 +858,11 @@ const ctmUi = (() => {
 
   async function cleanupDictionary() {
     const plan = CTM.planCleanup(dict(), ctmStore.maxTagLength);
-    if (!plan.variantPlans.length && !plan.prunedRemoved.length && !plan.duplicates.length && !plan.conflicts.length) {
+    if (!plan.variantPlans.length && !plan.prunedRemoved.length && !plan.duplicates.length && !plan.conflictFixes.length) {
       toast("Nothing to clean up. The dictionary is tidy.");
       return;
     }
-    const changes = plan.variantPlans.length + plan.prunedRemoved.length;
+    const changes = plan.variantPlans.length + plan.prunedRemoved.length + plan.conflictFixes.length;
     const body = [
       h("p", { text: "Only the saved dictionary changes: no card is touched and nothing that matches today stops matching. Canonicals are never renamed or merged here." }),
       section(
@@ -871,7 +873,7 @@ const ctmUi = (() => {
       ),
       section(`Removed entries already covered by the length rule (${plan.prunedRemoved.length})`, plan.prunedRemoved.map((t) => tagRow(t, undefined, "ctm-diff--del"))),
       section(`Possible duplicate canonicals (${plan.duplicates.length}), not merged: use ⋯ → Merge into`, plan.duplicates.map((names) => tagRow(names.join(" / ")))),
-      section(`Spellings claimed by two canonicals (${plan.conflicts.length}); the first one wins`, plan.conflicts.map((c) => tagRow(`${c.key} → ${c.canonicals.join(" / ")}`))),
+      section(`Tags listed under two canonicals (${plan.conflicts.length}): the struck-through entries never match and are removed`, plan.conflicts.map(conflictRow)),
     ];
     if (!changes) {
       await messageDialog("Dictionary report", body);

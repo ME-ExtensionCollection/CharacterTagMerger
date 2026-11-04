@@ -100,6 +100,13 @@ describe("bucketize", () => {
     assert.ok(!groups.find((g) => g.canonical === "Fantasy").variants.some((v) => v.count > 0));
   });
 
+  it("a variant under two canonicals goes to the one listed last, as in SillyTavern", () => {
+    const dict = dictWith({ "Demi-Human": ["puppy girl"], "Dog Girl": ["Puppy Girl"] });
+    const { groups } = CTM.bucketize(CTM.scanCards([{ id: "a", tags: ["puppy girl"] }]), dict);
+    assert.equal(groups.find((g) => g.canonical === "Dog Girl").cardCount, 1);
+    assert.equal(groups.find((g) => g.canonical === "Demi-Human").cardCount, 0);
+  });
+
   it("mapping wins over removedTags and the length rule", () => {
     const long = "x".repeat(50);
     const dict = dictWith({ Female: [long] }, { removedTags: ["female"] });
@@ -304,7 +311,7 @@ describe("import and export", () => {
 
   it("reports spellings claimed by two canonicals", () => {
     const { conflicts } = CTM.parseImport({ mapping: { A: ["x"], B: ["X"] } }, CTM.emptyDict());
-    eq(conflicts, [{ key: "x", canonicals: ["A", "B"] }]);
+    eq(conflicts, [{ key: "x", spelling: "x", canonicals: ["A", "B"], winner: "B" }]);
   });
 
   it("rejects files without a mapping", () => {
@@ -329,6 +336,19 @@ describe("dictionary cleanup", () => {
     const placement = (b) => b.groups.flatMap((g) => g.variants.filter((v) => v.count > 0).map((v) => `${v.tag}=>${g.canonical}`)).sort();
     eq(placement(after), placement(before));
     eq(after.unassigned.map((u) => u.tag).sort(), before.unassigned.map((u) => u.tag).sort());
+  });
+
+  it("removes the conflict entries that never match, keeping every tag's placement", () => {
+    const dict = dictWith({ "Demi-Human": ["Puppy Girl", "Cat_Ears"], "Dog Girl": ["puppy girl"], "Cat Girl": ["Cat_Ears"], Bimbo: ["Airhead"], Airhead: [] });
+    const cards = [{ id: "a", tags: ["Puppy Girl", "cat_ears", "airhead"] }];
+    const placement = () => CTM.bucketize(CTM.scanCards(cards), dict).groups.filter((g) => g.cardCount).map((g) => g.canonical).sort();
+    const before = placement();
+    const plan = CTM.planCleanup(dict);
+    eq(plan.conflictFixes.map((f) => [f.canonical, f.tag]), [["Demi-Human", "Puppy Girl"], ["Demi-Human", "Cat_Ears"], ["Bimbo", "Airhead"]]);
+    CTM.applyCleanup(dict, plan);
+    eq(placement(), before);
+    eq(before, ["Airhead", "Cat Girl", "Dog Girl"]);
+    eq(CTM.findConflicts(dict), []);
   });
 
   it("reports near-duplicate canonicals without merging them", () => {
