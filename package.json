@@ -1,0 +1,17 @@
+{
+  "name": "marinara-tag-merger",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Marinara Engine extension: merge, rename and clean character tags with a canonical tag dictionary.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "check": "node scripts/build.mjs --check && node --test test/*.test.mjs",
+    "dev": "node scripts/serve.mjs",
+    "smoke": "node scripts/smoke.mjs"
+  }
+}

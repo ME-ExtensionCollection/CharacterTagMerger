@@ -1,0 +1,10 @@
+# Dev harness build output (node scripts/build.mjs)
+dev/build/
+
+# Smoke-test artifacts
+smoke-backup.json
+
+node_modules/
+.DS_Store
+*.swp
+*~

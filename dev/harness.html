@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tag Merger dev harness</title>
+    <link rel="icon" href="data:," />
+    <style>
+      /* A small subset of Marinara's dark theme tokens (packages/client/src/styles/globals.css). */
+      :root {
+        --background: #050312;
+        --foreground: #d4d4d4;
+        --card: #141414d9;
+        --primary: #ec4b97;
+        --secondary: #1a1a2e;
+        --muted: #1a1a2e;
+        --muted-foreground: #a1a1aa;
+        --accent: #2a1a3e;
+        --destructive: #ff6b9d;
+        --warning: #eeaa37;
+        --border: color-mix(in srgb, var(--primary) 20%, transparent);
+        --radius: 0.75rem;
+        --marinara-chat-chrome-accent: var(--primary);
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        background: var(--background);
+        color: var(--foreground);
+        font-family: system-ui, sans-serif;
+      }
+      header[data-component="TopBar"] {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.5rem 1rem;
+        border-bottom: 1px solid var(--border);
+      }
+      nav[data-tour="panel-buttons"] {
+        display: flex;
+        gap: 0.25rem;
+      }
+      nav button {
+        display: flex;
+        width: 2rem;
+        height: 2rem;
+        align-items: center;
+        justify-content: center;
+        border: 0;
+        border-radius: 0.5rem;
+        background: transparent;
+        color: var(--muted-foreground);
+        cursor: pointer;
+      }
+      nav button:hover {
+        background: var(--accent);
+      }
+      main {
+        max-width: 48rem;
+        padding: 1rem;
+        line-height: 1.5;
+      }
+      code {
+        color: var(--primary);
+      }
+    </style>
+    <link rel="stylesheet" href="/dev/build/extension.css" />
+  </head>
+  <body>
+    <header data-component="TopBar">
+      <strong>Mock Marinara</strong>
+      <nav data-tour="panel-buttons" aria-label="Panel navigation">
+        <button data-tour="panel-characters" title="Characters">C</button>
+        <button data-tour="panel-settings" title="Settings">S</button>
+      </nav>
+    </header>
+    <main>
+      <p>Dev harness for the Tag Merger extension. The tag icon in the top bar opens it.</p>
+      <p>
+        The character library is mock data built from <code>test/fixtures/st-sample-tags.json</code> and kept in this
+        browser's localStorage. Apply and Restore write only to that mock.
+      </p>
+      <p>
+        <button type="button" onclick="__ctmHarness.reset()">Reset mock library and saved dictionary</button>
+      </p>
+    </main>
+    <!-- core.js on its own gives the mock server Marinara's tag edit semantics. -->
+    <script src="/extension/src/core.js"></script>
+    <script src="/dev/mock-marinara.js"></script>
+    <script src="/dev/build/page-runtime.js"></script>
+  </body>
+</html>
