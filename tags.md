@@ -53,6 +53,7 @@ You've been given a tag dictionary exported from the **Tag Merger** extension fo
 - A canonical always matches its own name, so you don't need to list it as a variant.
 - Matching is **exact after normalization**. There is no fuzzy matching. A typo only merges if it is listed.
 - A tag that appears under a canonical **and** in `removedTags` stays mapped, because the mapping wins.
+- Unmapped tags containing `,` `;` or `|` are split into separate tags (an option that is on by default). Each piece goes through the same matching, so you don't need to map combined tags like `"cold, sarcastic"`; map their pieces instead. Map or remove a combined tag only to stop it from being split.
 - Unmapped tags longer than ~40 characters are removed automatically (an option that is on by default), so you don't need to list sentence-length junk.
 - Implications run **after** renaming. They match canonical names normalized, follow chains, ignore cycles, and never add a tag that's in `removedTags`.
 

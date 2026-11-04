@@ -36,6 +36,9 @@
     // A few messy spellings worth seeing in the editor.
     cards.push({ id: "messy-1", name: "Messy One", tags: ["🔥 dark elf", "#Female", "  female ", "a very long tag that somebody wrote as a full sentence about the card"] });
     cards.push({ id: "messy-2", name: "Messy Two", tags: ["FEMALE", "#fantasy", "slice_of-life"] });
+    // Several tags typed as one.
+    cards.push({ id: "messy-3", name: "Messy Three", tags: ["cold, sarcastic, tattoo artist, dominant, nsfw-allowed", "Female"] });
+    cards.push({ id: "messy-4", name: "Messy Four", tags: ["female, young adult, homeless, survivor, shy, e", "Experienced, Deal With It"] });
     return cards;
   }
 

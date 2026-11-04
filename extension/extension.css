@@ -382,6 +382,35 @@
   color: var(--ctm-danger);
 }
 
+.ctm-split-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ctm-split-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+.ctm-split-parts {
+  padding-left: 0.75rem;
+  color: var(--ctm-muted);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+
+.ctm-split-parts ins {
+  color: var(--ctm-ok);
+  text-decoration: none;
+}
+
+.ctm-split-parts del {
+  color: var(--ctm-danger);
+}
+
 /* ── Controls ── */
 
 .ctm-btn {

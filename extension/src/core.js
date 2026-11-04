@@ -369,6 +369,48 @@ const CTM = (() => {
     if (dict.implications[canonical].length === 0) delete dict.implications[canonical];
   }
 
+  // ── Combined tags ("cold, sarcastic") ──
+
+  // Only separators that never appear in real single tags. "/", "&" and "and"
+  // are left alone: Hurt/Comfort, Dungeons & Dragons, Mother and Daughter.
+  const SPLIT_RE = /[,;|\n]+/;
+
+  /** Pieces of a combined tag, or null when it is a single tag. */
+  function splitTag(tag) {
+    const pieces = String(tag)
+      .split(SPLIT_RE)
+      .map((p) => p.trim())
+      .filter(Boolean);
+    return pieces.length > 1 ? pieces : null;
+  }
+
+  /** Shared context for resolvePart. */
+  function partContext(dict, { maxTagLength = DEFAULT_MAX_TAG_LENGTH, standardize = false, skipRemoved = false } = {}, lookup = buildLookup(dict)) {
+    return { lookup, removedKeys: new Set(dict.removedTags.map(norm)), maxTagLength, standardize, skipRemoved };
+  }
+
+  /**
+   * What one piece of a combined tag becomes:
+   *   canonical  -> that canonical's name
+   *   removed / too-long -> dropped (kept as typed when Skip Removed is on)
+   *   too-short (one character, e.g. a truncated "e") -> dropped
+   *   otherwise  -> kept as a new tag, cleaned by standardizeTag when Standardize is on
+   * Returns { tag, target, reason }; target is null when the piece is dropped.
+   */
+  function resolvePart(piece, ctx) {
+    const tag = String(piece).trim();
+    const key = norm(tag);
+    if (key.length < 2) return { tag, target: null, reason: "too-short" };
+    const canonical = ctx.lookup.get(key);
+    if (canonical) return { tag, target: canonical, reason: "canonical" };
+    const keep = () => (ctx.standardize ? standardizeTag(tag) || tag : tag);
+    if (ctx.removedKeys.has(key)) return ctx.skipRemoved ? { tag, target: keep(), reason: "new" } : { tag, target: null, reason: "removed" };
+    if (ctx.maxTagLength && key.length > ctx.maxTagLength) {
+      return ctx.skipRemoved ? { tag, target: keep(), reason: "new" } : { tag, target: null, reason: "too-long" };
+    }
+    return { tag, target: keep(), reason: "new" };
+  }
+
   // ── Library scan + buckets ──
 
   /**
@@ -398,9 +440,11 @@ const CTM = (() => {
    *   groups      one per canonical (all canonicals, even unused), with observed + declared variants
    *   unassigned  on cards, claimed by nothing
    *   removed     in removedTags, or unclaimed and longer than maxTagLength (auto: true)
-   * A tag claimed by a canonical stays there even if it is also in removedTags or too long.
+   *   split       unclaimed combined tags ("cold, sarcastic") with their raw pieces, when `split` is on
+   * Precedence: canonical, removedTags, split, length rule, unassigned. So a combined
+   * tag you mapped or removed is left alone, and splitting beats the length rule.
    */
-  function bucketize(stats, dict, { maxTagLength = DEFAULT_MAX_TAG_LENGTH } = {}) {
+  function bucketize(stats, dict, { maxTagLength = DEFAULT_MAX_TAG_LENGTH, split = true } = {}) {
     const lookup = buildLookup(dict);
     const removedKeys = new Set(dict.removedTags.map(norm));
     const groups = new Map();
@@ -410,6 +454,7 @@ const CTM = (() => {
       groups.set(canonical, vmap);
     }
     const unassigned = [];
+    const splits = [];
     const removed = new Map(dict.removedTags.map((t) => [t, { tag: t, count: 0, ids: [], auto: false }]));
     for (const [tag, entry] of stats) {
       const key = norm(tag);
@@ -419,6 +464,8 @@ const CTM = (() => {
         groups.get(canonical).set(tag, { ...item, own: key === norm(canonical) });
       } else if (removedKeys.has(key)) {
         removed.set(tag, { ...item, auto: false });
+      } else if (split && splitTag(tag)) {
+        splits.push({ ...item, parts: splitTag(tag) });
       } else if (maxTagLength && key.length > maxTagLength) {
         removed.set(tag, { ...item, auto: true });
       } else {
@@ -441,6 +488,7 @@ const CTM = (() => {
       }),
       unassigned: unassigned.sort(byCount),
       removed: [...removed.values()].sort(byCount),
+      split: splits.sort(byCount),
     };
   }
 
@@ -479,15 +527,16 @@ const CTM = (() => {
    *   standardize   also clean the spelling of unassigned tags (standardizeTag)
    *   skipRemoved   leave Removed tags (listed and too-long) on the cards
    *   maxTagLength  auto-remove cutoff; 0 disables
+   *   splitCombined replace combined tags ("cold, sarcastic") with their pieces
    *
    * Returns { changes: [{id, name, before, after}], calls: [{ids, edit}], summary }.
    * Every call is a POST /api/characters/bulk-tags body minus ids-chunking;
    * applyTagEdit(card.tags, call.edit) equals `after` for each card in the call.
    */
   function planApply(cards, dict, options = {}) {
-    const { standardize = false, skipRemoved = false, maxTagLength = DEFAULT_MAX_TAG_LENGTH } = options;
+    const { standardize = false, skipRemoved = false, maxTagLength = DEFAULT_MAX_TAG_LENGTH, splitCombined = true } = options;
     const stats = scanCards(cards);
-    const { groups, unassigned, removed } = bucketize(stats, dict, { maxTagLength });
+    const { groups, unassigned, removed, split } = bucketize(stats, dict, { maxTagLength, split: splitCombined });
 
     // Renames, one per fold key (Marinara keeps the first rename for a key).
     const rename = [];
@@ -509,8 +558,17 @@ const CTM = (() => {
     }
     const remove = skipRemoved ? [] : removed.filter((r) => r.count > 0).map((r) => r.tag);
 
-    // Implications, resolved to canonical spellings. Removed spellings are never added.
+    // Combined tags come off the card and their kept pieces are added back.
+    // Skip Removed does not apply: splitting replaces a tag, it does not delete it.
     const lookup = buildLookup(dict);
+    const ctx = partContext(dict, { maxTagLength, standardize, skipRemoved }, lookup);
+    const splitTo = new Map(); // fold(combined tag) -> kept pieces
+    for (const s of split) {
+      splitTo.set(foldTag(s.tag), s.parts.map((p) => resolvePart(p, ctx).target).filter(Boolean));
+      remove.push(s.tag);
+    }
+
+    // Implications, resolved to canonical spellings. Removed spellings are never added.
     const implies = {};
     for (const [canonical, targets] of Object.entries(dict.implications)) {
       if (canonical in dict.mapping) implies[canonical] = targets.map((t) => lookup.get(norm(t)) ?? t.trim());
@@ -525,12 +583,24 @@ const CTM = (() => {
     for (const card of cards) {
       const before = (card.tags ?? []).filter((t) => typeof t === "string");
       const renamed = applyBase(before);
-      const add = hasImplications ? expandImplications(renamed, implies, blocked) : [];
+      const pieces = [];
+      if (splitTo.size) {
+        const seen = new Set();
+        for (const t of before) {
+          for (const piece of splitTo.get(foldTag(t)) ?? []) {
+            if (seen.has(foldTag(piece))) continue;
+            seen.add(foldTag(piece));
+            pieces.push(piece);
+          }
+        }
+      }
+      const implied = hasImplications ? expandImplications([...renamed, ...pieces], implies, blocked) : [];
+      const add = [...pieces, ...implied];
       const key = add.join("\u0000");
       if (add.length > 0 && !withAdd.has(key)) withAdd.set(key, compileTagEdit({ rename, remove, add }));
       const after = add.length > 0 ? withAdd.get(key)(before) : renamed;
       if (tagListsEqual(before, after)) continue;
-      changes.push({ id: card.id, name: card.name ?? "", before, after, renamed });
+      changes.push({ id: card.id, name: card.name ?? "", before, after, renamed, pieces });
       if (!groupsByAdd.has(key)) groupsByAdd.set(key, { add, ids: [], tagLists: [] });
       const group = groupsByAdd.get(key);
       group.ids.push(card.id);
@@ -545,7 +615,7 @@ const CTM = (() => {
       }
     }
 
-    return { changes, calls, summary: summarize(changes, rename, remove, stats) };
+    return { changes, calls, summary: summarize(changes, rename, remove, stats, splitTo) };
   }
 
   /**
@@ -563,21 +633,26 @@ const CTM = (() => {
     return { rename, remove, add: edit.add };
   }
 
-  function summarize(changes, rename, remove, stats) {
+  function summarize(changes, rename, remove, stats, splitTo = new Map()) {
     const renamed = new Map();
     const removed = new Map();
     const added = new Map();
+    const splitCounts = new Map();
     const bump = (map, key) => map.set(key, (map.get(key) ?? 0) + 1);
     const renameTo = new Map(normalizeTagEdit({ rename }).rename.map((r) => [foldTag(r.from), r.to]));
     const removeSet = new Set(remove.map(foldTag));
     for (const change of changes) {
       for (const tag of change.before) {
+        if (splitTo.has(foldTag(tag))) {
+          bump(splitCounts, tag);
+          continue;
+        }
         const to = renameTo.get(foldTag(tag));
         const final = to ?? tag;
         if (removeSet.has(foldTag(final))) bump(removed, tag);
         else if (to !== undefined && to !== tag.trim()) bump(renamed, `${tag}\u0000${to}`);
       }
-      const kept = new Set(change.renamed.map(foldTag));
+      const kept = new Set([...change.renamed, ...(change.pieces ?? [])].map(foldTag));
       for (const tag of change.after) if (!kept.has(foldTag(tag))) bump(added, tag);
     }
     const changedIds = new Set(changes.map((c) => c.id));
@@ -595,6 +670,7 @@ const CTM = (() => {
       }).sort(byCount),
       removed: [...removed].map(([tag, count]) => ({ tag, count })).sort(byCount),
       added: [...added].map(([tag, count]) => ({ tag, count })).sort(byCount),
+      split: [...splitCounts].map(([from, count]) => ({ from, to: splitTo.get(foldTag(from)) ?? [], count })).sort(byCount),
     };
   }
 
@@ -845,6 +921,9 @@ const CTM = (() => {
     moveCategory,
     addImplication,
     removeImplication,
+    splitTag,
+    partContext,
+    resolvePart,
     scanCards,
     bucketize,
     expandImplications,

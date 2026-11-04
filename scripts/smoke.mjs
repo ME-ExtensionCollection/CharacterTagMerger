@@ -118,6 +118,18 @@ const exported = JSON.parse(await (await import("node:fs/promises")).readFile(aw
 assert.equal(exported.format, "ctm-tag-mapping");
 assert.ok(exported.implies["Drow Elf"]?.includes("Elf"), "export carries the implication");
 
+step("combined tags show in the Split tab and the apply preview");
+await page.getByRole("tab", { name: /^Split \(/ }).click();
+const splitRow = page.locator(".ctm-split-row", { hasText: "cold, sarcastic, tattoo artist" });
+await splitRow.waitFor();
+assert.equal(await splitRow.locator(".ctm-split-parts del", { hasText: /^e$/ }).count(), 0, "e belongs to the other row");
+await page.locator(".ctm-split-row", { hasText: "homeless" }).locator(".ctm-split-parts del", { hasText: /^e$/ }).waitFor();
+await shot("10-split");
+await page.getByRole("button", { name: "Apply…" }).click();
+await dialog("Apply tag changes").getByText(/^Split into separate tags \(\d+\)/).waitFor();
+await dialog("Apply tag changes").getByRole("button", { name: "Cancel" }).click();
+await page.getByRole("tab", { name: /^Unassigned/ }).click();
+
 step("Skip Removed: preview removes nothing");
 await page.getByLabel("Skip Removed").check();
 await page.getByRole("button", { name: "Apply…" }).click();

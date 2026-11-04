@@ -12,6 +12,7 @@ const ctmStore = (() => {
     maxTagLength: CTM.DEFAULT_MAX_TAG_LENGTH,
     standardize: false,
     skipRemoved: false,
+    splitCombined: true,
   });
 
   let dict = CTM.emptyDict();
@@ -25,7 +26,7 @@ const ctmStore = (() => {
   function cleanSettings(raw) {
     const s = { ...DEFAULT_SETTINGS };
     if (raw && typeof raw === "object") {
-      for (const key of ["autoRemoveLong", "standardize", "skipRemoved"]) {
+      for (const key of ["autoRemoveLong", "standardize", "skipRemoved", "splitCombined"]) {
         if (typeof raw[key] === "boolean") s[key] = raw[key];
       }
       const n = Math.round(Number(raw.maxTagLength));

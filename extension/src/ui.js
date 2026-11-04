@@ -8,12 +8,13 @@ const ctmUi = (() => {
   const CHIP_LIMIT = 300; // side-pane chips rendered before "Show more"
   const LIST_LIMIT = 500; // rows per preview list
   const UNDO_LIMIT = 50;
-  const RESTORE_SPACING_MS = 150; // ~400 PATCH/min, under Marinara's 600 requests/min default
+  const RESTORE_SPACING_MS = 150;
+  const CALL_SPACING_MS = 100; // between bulk-tags calls // ~400 PATCH/min, under Marinara's 600 requests/min default
 
   let root = null;
   let cards = [];
   let stats = new Map();
-  let buckets = { groups: [], unassigned: [], removed: [] };
+  let buckets = { groups: [], unassigned: [], removed: [], split: [] };
   let loading = false;
   let busy = false; // a write is running: no closing
   let popover = null;
@@ -307,7 +308,7 @@ const ctmUi = (() => {
   const dict = () => ctmStore.dict;
 
   function recompute() {
-    buckets = CTM.bucketize(stats, dict(), { maxTagLength: ctmStore.maxTagLength });
+    buckets = CTM.bucketize(stats, dict(), { maxTagLength: ctmStore.maxTagLength, split: ctmStore.settings.splitCombined });
   }
 
   /** Run a dictionary edit with undo, save and re-render. `fn` returns false to signal "nothing changed". */
@@ -392,7 +393,10 @@ const ctmUi = (() => {
       plural(buckets.groups.length, "canonical"),
       `${buckets.unassigned.length.toLocaleString()} unassigned`,
       `${removing.toLocaleString()} to remove`,
-    ].join(" · ");
+      buckets.split.length ? `${buckets.split.length.toLocaleString()} to split` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
   }
 
   function renderCanon() {
@@ -615,7 +619,7 @@ const ctmUi = (() => {
 
   function sideItems() {
     const q = CTM.norm(view.q);
-    let items = view.tab === "unassigned" ? buckets.unassigned : buckets.removed.filter((r) => r.count > 0);
+    let items = view.tab === "unassigned" ? buckets.unassigned : view.tab === "split" ? buckets.split : buckets.removed.filter((r) => r.count > 0);
     if (view.tab === "unassigned" && view.hideOneOffs) items = items.filter((i) => i.count > 1);
     return q ? items.filter((i) => matches(i.tag, q)) : items;
   }
@@ -623,11 +627,16 @@ const ctmUi = (() => {
   function renderSide() {
     const unassignedCount = buckets.unassigned.length;
     const removedCount = buckets.removed.filter((r) => r.count > 0).length;
+    const splitOn = ctmStore.settings.splitCombined;
+    if (!splitOn && view.tab === "split") view.tab = "unassigned";
     els.tabs.replaceChildren(
       ...[
         ["unassigned", `Unassigned (${unassignedCount.toLocaleString()})`, "On cards, mapped to nothing. Left as they are on Apply."],
         ["removed", `Removed (${removedCount.toLocaleString()})`, "Removed from every card on Apply, unless Skip Removed is on."],
-      ].map(([tab, label, title]) =>
+        splitOn ? ["split", `Split (${buckets.split.length.toLocaleString()})`, "Several tags typed as one. Apply replaces each with its pieces. Map or remove one to stop it splitting."] : null,
+      ]
+        .filter(Boolean)
+        .map(([tab, label, title]) =>
         h("button", {
           type: "button",
           class: `ctm-tab${view.tab === tab ? " is-active" : ""}`,
@@ -672,7 +681,9 @@ const ctmUi = (() => {
     els.sideScroll.replaceChildren(
       ...(items.length
         ? [
-            h("div", { class: "ctm-chips" }, shown.map((item) => tagChip(item, view.tab))),
+            view.tab === "split"
+              ? h("div", { class: "ctm-split-list" }, shown.map(splitRow))
+              : h("div", { class: "ctm-chips" }, shown.map((item) => tagChip(item, view.tab))),
             items.length > shown.length
               ? button(`Show ${Math.min(CHIP_LIMIT, items.length - shown.length).toLocaleString()} more (${(items.length - shown.length).toLocaleString()} hidden)`, () => {
                   view.chipLimit += CHIP_LIMIT;
@@ -680,14 +691,53 @@ const ctmUi = (() => {
                 }, { kind: "ghost" })
               : null,
           ].filter(Boolean)
-        : [h("div", { class: "ctm-empty", text: view.q ? "No tags match." : view.tab === "unassigned" ? "Every tag is mapped or removed." : "No tags are set to be removed." })]),
+        : [h("div", { class: "ctm-empty", text: view.q ? "No tags match." : { unassigned: "Every tag is mapped or removed.", removed: "No tags are set to be removed.", split: "No combined tags." }[view.tab] })]),
+    );
+  }
+
+  const PART_REASON = {
+    removed: "On the Removed list, so it is dropped",
+    "too-long": "Over the length limit, so it is dropped",
+    "too-short": "One character, so it is dropped",
+  };
+
+  /** A combined tag and what Apply turns it into. */
+  function splitRow(item) {
+    const settings = ctmStore.settings;
+    const ctx = CTM.partContext(dict(), { maxTagLength: ctmStore.maxTagLength, standardize: settings.standardize, skipRemoved: settings.skipRemoved });
+    // Same pieces Apply adds: two pieces that resolve to one tag show once.
+    const seen = new Set();
+    const parts = item.parts
+      .map((p) => CTM.resolvePart(p, ctx))
+      .filter((part) => {
+        if (!part.target) return true;
+        const key = CTM.foldTag(part.target);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    return h(
+      "div",
+      { class: "ctm-split-row" },
+      tagChip(item, "split"),
+      h(
+        "div",
+        { class: "ctm-split-parts" },
+        "→ ",
+        parts.map((part, i) => [
+          i ? ", " : "",
+          part.target
+            ? h("ins", { title: part.reason === "canonical" ? `Canonical (from "${part.tag}")` : "New tag", text: part.target })
+            : h("del", { title: PART_REASON[part.reason], text: part.tag }),
+        ]),
+      ),
     );
   }
 
   function bulkBar(items) {
     const selected = [...view.selected];
     const n = selected.length;
-    const others = view.tab === "unassigned" ? "removed" : "unassigned";
+    const others = view.tab === "removed" ? "unassigned" : "removed";
     const moveTo = (fn) => {
       edit((d) => {
         for (const tag of selected) fn(d, tag);
@@ -905,7 +955,7 @@ const ctmUi = (() => {
     render();
 
     const settings = ctmStore.settings;
-    const options = { standardize: settings.standardize, skipRemoved: settings.skipRemoved, maxTagLength: ctmStore.maxTagLength };
+    const options = { standardize: settings.standardize, skipRemoved: settings.skipRemoved, maxTagLength: ctmStore.maxTagLength, splitCombined: settings.splitCombined };
     const plan = CTM.planApply(cards, dict(), options);
     if (!plan.changes.length) {
       await messageDialog("Nothing to change", [h("p", { text: "Every card already matches the dictionary." })]);
@@ -923,8 +973,10 @@ const ctmUi = (() => {
         h("li", { text: settings.standardize ? "Standardize unassigned: on (unmapped tags get clean spelling)" : "Standardize unassigned: off" }),
         h("li", { text: settings.skipRemoved ? "Skip Removed: on (nothing is removed)" : "Skip Removed: off (Removed tags are taken off cards)" }),
         h("li", { text: ctmStore.maxTagLength ? `Auto-remove: unmapped tags longer than ${ctmStore.maxTagLength} characters` : "Auto-remove long tags: off" }),
+        h("li", { text: settings.splitCombined ? "Split combined tags: on (\"cold, sarcastic\" becomes Cold + Sarcastic)" : "Split combined tags: off" }),
       ),
       section(`Renamed / merged (${summary.renamed.length})`, summary.renamed.map((r) => diffRow(r.from, r.to, r.count))),
+      section(`Split into separate tags (${summary.split.length})`, summary.split.map((r) => diffRow(r.from, r.to.join(", ") || "(nothing kept)", r.count))),
       section(`Removed (${summary.removed.length})`, summary.removed.map((r) => tagRow(r.tag, r.count, "ctm-diff--del")), settings.skipRemoved ? "Skip Removed is on." : null),
       section(`Added by implications (${summary.added.length})`, summary.added.map((r) => tagRow(r.tag, r.count, "ctm-diff--add"))),
       h(
@@ -969,6 +1021,8 @@ const ctmUi = (() => {
       }
       done += call.ids.length;
       progress.setBody(progressText(`Writing ${done.toLocaleString()} of ${total.toLocaleString()} cards…`));
+      // Combined tags can make many small calls; stay well under Marinara's 600 requests/min.
+      if (i + 1 < plan.calls.length) await new Promise((r) => marinara.setTimeout(r, CALL_SPACING_MS));
     }
     progress.close();
     busy = false;
@@ -1177,8 +1231,18 @@ const ctmUi = (() => {
           h(
             "div",
             { class: "ctm-options" },
-            checkbox("Standardize unassigned", settings.standardize, (v) => ctmStore.setSetting("standardize", v), "On Apply, also clean the spelling of unmapped tags: strip emoji and #, trim spaces, Title Case all-lowercase tags."),
-            checkbox("Skip Removed", settings.skipRemoved, (v) => ctmStore.setSetting("skipRemoved", v), "On Apply, only rename and merge. Removed tags (listed and too long) stay on cards."),
+            checkbox("Standardize unassigned", settings.standardize, (v) => {
+              ctmStore.setSetting("standardize", v);
+              render();
+            }, "On Apply, also clean the spelling of unmapped tags: strip emoji and #, trim spaces, Title Case all-lowercase tags."),
+            checkbox("Skip Removed", settings.skipRemoved, (v) => {
+              ctmStore.setSetting("skipRemoved", v);
+              render();
+            }, "On Apply, only rename and merge. Removed tags (listed and too long) stay on cards."),
+            checkbox("Split combined tags (, ; |)", settings.splitCombined, (v) => {
+              ctmStore.setSetting("splitCombined", v);
+              refresh();
+            }, "Replace tags like \"cold, sarcastic\" with Cold and Sarcastic. A combined tag you mapped or removed is left alone."),
             h(
               "span",
               { class: "ctm-check" },

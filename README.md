@@ -12,7 +12,8 @@ It is a port of the SillyTavern [Character Tag Merger](https://github.com/Enchan
 - **Unassigned and Removed lists.** Unassigned holds tags on your cards that nothing maps yet. Removed holds junk that Apply takes off every card. Click a tag to move it to a canonical, unassign it, remove it, or make it a new canonical. Use **Select** to move many at once.
 - **Implications.** `Dark Elf → Elf` adds `Elf` to every card with `Dark Elf`, following chains (`Elf → Fantasy`).
 - **Auto-filtering.** **Standardize unassigned** strips emoji and `#`, trims spaces, and Title Cases all-lowercase tags. **Auto-remove tags longer than N** sends sentence-length tags to Removed. Tags that a canonical claims are always kept.
-- **Skip Removed.** With this on, Apply only renames and merges, and nothing is removed.
+- **Split combined tags.** A tag like `cold, sarcastic, tattoo artist` (several tags typed as one) is replaced by its pieces on Apply. Splitting happens only on `,` `;` `|` and line breaks, so `Hurt/Comfort` and `Dungeons & Dragons` stay whole. Each piece that matches a canonical becomes that canonical, and other pieces are added as new tags. Pieces on the Removed list, over the length limit, or one character long are dropped. The **Split** tab shows each combined tag and what it becomes. To keep a combined tag whole, map it to a canonical or move it to Removed.
+- **Skip Removed.** With this on, Apply only renames, merges and splits, and nothing is removed.
 - **Import / export.** Uses the SillyTavern extension's `ctm-tag-mapping` JSON, optionally with your unassigned tags so an AI can sort them (see [`tags.md`](tags.md)).
 - **Dictionary cleanup and category manager.** Cleanup drops redundant variant spellings and reports likely duplicate canonicals. The manager reorders, renames and deletes categories.
 - **Undo.** The **Undo** button or Ctrl+Z steps back through dictionary edits (the last 50).

@@ -267,6 +267,74 @@ describe("planApply on the sample library", () => {
   });
 });
 
+describe("combined tags", () => {
+  it("splits only on , ; | and newlines", () => {
+    eq(CTM.splitTag("cold, sarcastic"), ["cold", "sarcastic"]);
+    eq(CTM.splitTag("a; b | c\nd"), ["a", "b", "c", "d"]);
+    for (const t of ["Hurt/Comfort", "Dungeons & Dragons", "Mother and Daughter", "Solo", "trailing,", ", "]) assert.equal(CTM.splitTag(t), null, t);
+  });
+
+  it("a mapped or removed combined tag is left alone; a long one splits instead of being removed", () => {
+    const long = "female, young adult, homeless, survivor, intelligent, resourceful, e";
+    const stats = CTM.scanCards([{ id: "a", tags: ["can be wholesome, can be sexy", "made by me, credits", long, "cold, sarcastic"] }]);
+    const dict = dictWith({ "Can Be Wholesome, Can Be Sexy": [] }, { removedTags: ["made by me, credits"] });
+    const { groups, removed, split, unassigned } = CTM.bucketize(stats, dict, { maxTagLength: 40 });
+    assert.equal(groups[0].cardCount, 1);
+    eq(removed.filter((r) => r.count).map((r) => r.tag), ["made by me, credits"]);
+    eq(split.map((x) => x.tag).sort(), ["cold, sarcastic", long].sort());
+    eq(unassigned, []);
+    assert.equal(CTM.bucketize(stats, dict, { maxTagLength: 40, split: false }).split.length, 0);
+  });
+
+  it("resolves pieces: canonical, kept, or dropped as junk", () => {
+    const dict = dictWith({ Female: [], Sarcastic: ["snarky"] }, { removedTags: ["nsfw-allowed"] });
+    const ctx = CTM.partContext(dict, { maxTagLength: 20 });
+    const r = (p, c = ctx) => plain(CTM.resolvePart(p, c));
+    eq(r("female"), { tag: "female", target: "Female", reason: "canonical" });
+    eq(r(" snarky "), { tag: "snarky", target: "Sarcastic", reason: "canonical" });
+    eq(r("tattoo artist"), { tag: "tattoo artist", target: "tattoo artist", reason: "new" });
+    eq(r("nsfw-allowed"), { tag: "nsfw-allowed", target: null, reason: "removed" });
+    eq(r("x".repeat(21)), { tag: "x".repeat(21), target: null, reason: "too-long" });
+    eq(r("e"), { tag: "e", target: null, reason: "too-short" });
+    eq(r("tattoo artist", CTM.partContext(dict, { standardize: true })).target, "Tattoo Artist");
+    eq(r("nsfw-allowed", CTM.partContext(dict, { skipRemoved: true })).target, "nsfw-allowed");
+    eq(r("e", CTM.partContext(dict, { skipRemoved: true })).target, null);
+  });
+
+  const cards = [
+    { id: "a", name: "A", tags: ["cold, sarcastic, tattoo artist, nsfw-allowed, e", "Female"] },
+    { id: "b", name: "B", tags: ["Sarcastic", "cold; Elves"] },
+    { id: "c", name: "C", tags: ["can be wholesome, can be sexy"] },
+  ];
+  const dict = dictWith({ Elf: ["elves"], Fantasy: [], "Can Be Wholesome, Can Be Sexy": [] }, { removedTags: ["nsfw-allowed"], implications: { Elf: ["Fantasy"] } });
+
+  for (const options of [{}, { skipRemoved: true }, { standardize: true }]) {
+    it(`apply replaces combined tags with their pieces ${JSON.stringify(options)}`, () => {
+      const plan = CTM.planApply(cards, dict, options);
+      const written = new Map(simulateServer(cards, plan.calls).map((c) => [c.id, c.tags]));
+      for (const change of plan.changes) eq(written.get(change.id), change.after);
+      const cold = options.standardize ? "Cold" : "cold";
+      const tattoo = options.standardize ? "Tattoo Artist" : "tattoo artist";
+      eq(written.get("a"), ["Female", cold, options.standardize ? "Sarcastic" : "sarcastic", tattoo, ...(options.skipRemoved ? ["nsfw-allowed"] : [])]);
+      eq(written.get("b"), ["Sarcastic", cold, "Elf", "Fantasy"], "pieces dedupe with existing tags; implication follows a piece");
+      eq(written.get("c"), ["Can Be Wholesome, Can Be Sexy"], "a mapped combined tag is renamed, not split");
+      eq(plan.summary.removed, []);
+      eq(plan.summary.added, [{ tag: "Fantasy", count: 1 }]);
+      eq(plan.summary.split.map((x) => x.from).sort(), ["cold, sarcastic, tattoo artist, nsfw-allowed, e", "cold; Elves"].sort());
+      const again = CTM.planApply(simulateServer(cards, plan.calls), dict, options);
+      eq(again.changes, [], "idempotent");
+    });
+  }
+
+  it("splitCombined: false leaves combined tags to the other rules", () => {
+    const plan = CTM.planApply(cards, dict, { splitCombined: false, maxTagLength: 0 });
+    assert.ok(!plan.changes.some((c) => c.id === "a"));
+    eq(plan.summary.split, []);
+    const longRule = CTM.planApply(cards, dict, { splitCombined: false });
+    eq(longRule.summary.removed.map((r) => r.tag), ["cold, sarcastic, tattoo artist, nsfw-allowed, e"], "length rule removes it when splitting is off");
+  });
+});
+
 describe("backup and restore", () => {
   it("restoring a backup returns every changed card to its old tags", () => {
     const cards = sampleCards(3);
