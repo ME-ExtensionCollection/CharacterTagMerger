@@ -13,6 +13,7 @@ const ctmStore = (() => {
     standardize: false,
     skipRemoved: false,
     splitCombined: true,
+    shelfCanonicalOnly: true,
   });
 
   let dict = CTM.emptyDict();
@@ -26,7 +27,7 @@ const ctmStore = (() => {
   function cleanSettings(raw) {
     const s = { ...DEFAULT_SETTINGS };
     if (raw && typeof raw === "object") {
-      for (const key of ["autoRemoveLong", "standardize", "skipRemoved", "splitCombined"]) {
+      for (const key of ["autoRemoveLong", "standardize", "skipRemoved", "splitCombined", "shelfCanonicalOnly"]) {
         if (typeof raw[key] === "boolean") s[key] = raw[key];
       }
       const n = Math.round(Number(raw.maxTagLength));
@@ -77,6 +78,9 @@ const ctmStore = (() => {
 
   return Object.freeze({
     load,
+    get loaded() {
+      return loaded;
+    },
     save,
     flush,
     get dict() {

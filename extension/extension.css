@@ -1,3 +1,14 @@
+/* Marinara's Characters panel tag shelf: chips marked by src/shelf.js. */
+[data-ctm-shelf-hidden] {
+  display: none !important;
+}
+
+button[data-ctm-shelf-count]::after {
+  content: "· " attr(data-ctm-shelf-count);
+  font-weight: 400;
+  opacity: 0.75;
+}
+
 /* Character Tag Merger. This stylesheet is global in Marinara's page, so every
    rule is scoped to a ctm- class. Colors come from Marinara's theme tokens. */
 

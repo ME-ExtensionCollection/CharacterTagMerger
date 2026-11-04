@@ -159,6 +159,11 @@ describe("dictionary edits", () => {
     eq(Object.keys(dict.mapping), ["A", "B"]);
   });
 
+  it("canonicalNames lists exact canonical spellings only", () => {
+    const dict = dictWith({ Female: ["female", "#fem"], " Dark Elf ": [] });
+    eq([...CTM.canonicalNames(dict)], ["Female", "Dark Elf"]);
+  });
+
   it("implications skip self and duplicates", () => {
     const dict = dictWith({ Elf: [] });
     assert.equal(CTM.addImplication(dict, "Elf", "elf"), false);

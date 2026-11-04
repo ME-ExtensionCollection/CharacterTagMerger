@@ -338,6 +338,7 @@ const ctmUi = (() => {
   function refresh() {
     recompute();
     render();
+    ctmShelf.sync();
   }
 
   async function loadLibrary() {
@@ -1239,6 +1240,10 @@ const ctmUi = (() => {
               ctmStore.setSetting("skipRemoved", v);
               render();
             }, "On Apply, only rename and merge. Removed tags (listed and too long) stay on cards."),
+            checkbox("Characters panel: canonical tags only", settings.shelfCanonicalOnly, (v) => {
+              ctmStore.setSetting("shelfCanonicalOnly", v);
+              ctmShelf.sync();
+            }, "In Marinara's Characters panel tag list, show only tags spelled exactly like a canonical (plus any tag you are filtering by). Display only: card tags are not changed."),
             checkbox("Split combined tags (, ; |)", settings.splitCombined, (v) => {
               ctmStore.setSetting("splitCombined", v);
               refresh();

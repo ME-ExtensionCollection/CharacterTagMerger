@@ -21,8 +21,9 @@ ctmLauncher.addEventListener("click", () => {
 });
 
 let ctmFrame = 0;
-function ctmMountLauncher() {
+function ctmSync() {
   ctmFrame = 0;
+  ctmShelf.sync();
   const nav = document.querySelector(CTM_NAV_SELECTOR);
   if (!nav || ctmLauncher.parentElement === nav) return;
   const settings = nav.querySelector(CTM_SETTINGS_SELECTOR);
@@ -31,10 +32,17 @@ function ctmMountLauncher() {
 }
 
 const ctmObserver = new MutationObserver(() => {
-  if (!ctmFrame) ctmFrame = requestAnimationFrame(ctmMountLauncher);
+  if (!ctmFrame) ctmFrame = requestAnimationFrame(ctmSync);
 });
 ctmObserver.observe(document.body, { childList: true, subtree: true });
-ctmMountLauncher();
+ctmSync();
+
+// Read the saved dictionary now so the Characters panel shelf can be filtered
+// before the editor is ever opened. Reading never writes.
+ctmStore.load().then(
+  () => ctmShelf.sync(),
+  (error) => marinara.log.warn("Tag Merger could not read its saved dictionary", error),
+);
 
 // Best effort: write a pending dictionary edit before the page goes away.
 const ctmFlushOnHide = () => void ctmStore.flush();
@@ -45,6 +53,7 @@ marinara.onCleanup(async () => {
   ctmObserver.disconnect();
   if (ctmFrame) cancelAnimationFrame(ctmFrame);
   ctmLauncher.remove();
+  ctmShelf.clear();
   await ctmUi.close();
 });
 

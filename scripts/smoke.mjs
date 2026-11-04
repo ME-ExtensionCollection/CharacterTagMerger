@@ -58,6 +58,33 @@ await dialog("Import dictionary").getByRole("button", { name: "Import" }).click(
 await page.locator(".ctm-cat").first().waitFor();
 await shot("03-imported");
 
+step("Characters panel shelf shows only canonical tags (and active filters)");
+await page.waitForTimeout(700); // let the dictionary save
+const shelfState = () =>
+  page.evaluate(() => {
+    const names = new Set(Object.keys(JSON.parse(localStorage.getItem("ctm-harness-storage")).dict.mapping).map((c) => c.trim()));
+    const chips = [...document.querySelectorAll('[data-component="CharactersPanelScroll"] .group\\/tag')];
+    const visible = chips.filter((c) => getComputedStyle(c).display !== "none");
+    return {
+      total: chips.length,
+      visible: visible.map((c) => c.querySelector("button").textContent),
+      wrong: visible.filter((c) => !names.has(c.querySelector("button").textContent) && !c.classList.contains("mari-chrome-control--selected")).length,
+      count: document.getElementById("mock-tags-toggle").getAttribute("data-ctm-shelf-count"),
+    };
+  });
+let shelf = await shelfState();
+assert.ok(shelf.visible.length > 0 && shelf.visible.length < shelf.total, `some chips hidden (${shelf.visible.length}/${shelf.total})`);
+assert.equal(shelf.wrong, 0, "every visible chip is canonical or an active filter");
+assert.ok(shelf.visible.some((t) => t.startsWith("a very long tag")), "active filter chip stays visible");
+assert.equal(shelf.count, `${shelf.visible.length} canonical`);
+await page.evaluate(() => window.__renderMockShelf()); // React-style re-render
+await page.waitForTimeout(200);
+assert.equal((await shelfState()).visible.length, shelf.visible.length, "re-rendered chips are marked again");
+await page.getByLabel("Characters panel: canonical tags only").uncheck();
+assert.equal((await shelfState()).visible.length, shelf.total, "option off shows every chip");
+await page.getByLabel("Characters panel: canonical tags only").check();
+assert.equal((await shelfState()).visible.length, shelf.visible.length);
+
 step("search finds a canonical and its variants");
 await page.getByLabel("Search tags").fill("elf");
 await page.locator(".ctm-canon-name").first().waitFor();

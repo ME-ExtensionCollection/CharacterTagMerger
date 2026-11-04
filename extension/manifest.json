@@ -6,8 +6,17 @@
     "version": "0.1.0",
     "description": "Merge, rename and clean character tags across the whole library with a canonical tag dictionary. Compatible with the SillyTavern Character Tag Merger export format.",
     "runtime": "client",
-    "capabilities": ["full_page_access"],
-    "jsPath": ["src/core.js", "src/api.js", "src/store.js", "src/ui.js", "src/main.js"],
+    "capabilities": [
+      "full_page_access"
+    ],
+    "jsPath": [
+      "src/core.js",
+      "src/api.js",
+      "src/store.js",
+      "src/shelf.js",
+      "src/ui.js",
+      "src/main.js"
+    ],
     "cssPath": "extension.css"
   }
 }

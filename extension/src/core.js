@@ -195,6 +195,11 @@ const CTM = (() => {
     return lookup;
   }
 
+  /** Exact canonical names (trimmed), for showing only canonical tags in Marinara's lists. */
+  function canonicalNames(dict) {
+    return new Set(Object.keys(dict.mapping).map((c) => c.trim()));
+  }
+
   function findCanonical(dict, name) {
     const key = norm(name);
     return Object.keys(dict.mapping).find((c) => norm(c) === key) ?? null;
@@ -906,6 +911,7 @@ const CTM = (() => {
     sanitizeDict,
     cloneDict,
     buildLookup,
+    canonicalNames,
     findCanonical,
     findConflicts,
     assignTag,

@@ -63,6 +63,40 @@
       code {
         color: var(--primary);
       }
+      /* Marinara's chrome control is inline-flex, which beats the [hidden] attribute. */
+      .mari-chrome-control {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        border: 1px solid var(--border);
+        border-radius: 0.6rem;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        font-size: 0.75rem;
+      }
+      .mari-chrome-control button {
+        border: 0;
+        background: none;
+        color: inherit;
+        font: inherit;
+      }
+      .mari-chrome-control--selected {
+        border-color: var(--primary);
+      }
+      [data-component="CharactersPanelScroll"] {
+        max-width: 48rem;
+        margin: 0 1rem;
+        padding: 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+      }
+      .mock-shelf {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+        margin-top: 0.5rem;
+      }
     </style>
     <link rel="stylesheet" href="/dev/build/extension.css" />
   </head>
@@ -84,6 +118,37 @@
         <button type="button" onclick="__ctmHarness.reset()">Reset mock library and saved dictionary</button>
       </p>
     </main>
+    <!-- Mock of Marinara's Characters panel tag shelf (CharactersPanel.tsx), filled from the mock library. -->
+    <section data-component="CharactersPanelScroll">
+      <button type="button" class="mari-chrome-control mari-chrome-control--compact" aria-expanded="true" id="mock-tags-toggle"></button>
+      <div class="mock-shelf" id="mock-shelf"></div>
+    </section>
+    <script>
+      window.__renderMockShelf = async () => {
+        const cards = await window.__ctmHarness.library();
+        const tags = [...new Set(cards.flatMap((c) => c.tags))].sort((a, b) => a.localeCompare(b));
+        document.getElementById("mock-tags-toggle").textContent = `Tags (${tags.length})`;
+        const shelf = document.getElementById("mock-shelf");
+        shelf.replaceChildren(
+          ...tags.map((tag) => {
+            const chip = document.createElement("div");
+            // One active filter on a non-canonical tag, to check it stays visible.
+            const selected = tag.startsWith("a very long tag");
+            chip.className = `mari-chrome-control mari-chrome-control--compact group/tag gap-0 p-0${selected ? " mari-chrome-control--selected" : ""}`;
+            const pick = document.createElement("button");
+            pick.type = "button";
+            pick.setAttribute("aria-pressed", String(selected));
+            pick.textContent = tag;
+            const del = document.createElement("button");
+            del.type = "button";
+            del.textContent = "×";
+            chip.append(pick, del);
+            return chip;
+          }),
+        );
+      };
+      addEventListener("load", () => window.__renderMockShelf());
+    </script>
     <!-- core.js on its own gives the mock server Marinara's tag edit semantics. -->
     <script src="/extension/src/core.js"></script>
     <script src="/dev/mock-marinara.js"></script>
