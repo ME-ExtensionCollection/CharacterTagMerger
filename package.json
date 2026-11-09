@@ -1,6 +1,6 @@
 {
   "name": "marinara-tag-merger",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Marinara Engine extension: merge, rename and clean character tags with a canonical tag dictionary.",
   "type": "module",

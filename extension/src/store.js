@@ -49,6 +49,8 @@ const ctmStore = (() => {
     const size = new TextEncoder().encode(JSON.stringify(payload)).length;
     if (size > STORAGE_LIMIT) throw new Error(`The dictionary is too big to save (${size} of ${STORAGE_LIMIT} bytes).`);
     await marinara.storage.patch(payload);
+    // Tell other extensions (see share.js) that the dictionary changed.
+    window.dispatchEvent(new CustomEvent("marinara-tag-merger:changed"));
   }
 
   function save() {

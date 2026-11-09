@@ -534,38 +534,49 @@ const CTM = (() => {
    * @returns {{canonical: string[], other: string[]}}
    */
   function mapImportTags(tags, dict) {
+    return createImportMapper(dict)(tags);
+  }
+
+  /**
+   * mapImportTags for many cards: builds the dictionary lookup once and
+   * returns a function that maps one card's tags.
+   * @returns {(tags: string[]) => {canonical: string[], other: string[]}}
+   */
+  function createImportMapper(dict) {
     const lookup = buildLookup(dict);
-    const canonical = [];
-    const other = [];
-    const seen = new Set();
-    const push = (list, tag) => {
-      const key = foldTag(tag);
-      if (!key || seen.has(key)) return;
-      seen.add(key);
-      list.push(tag);
-    };
-    const leftovers = [];
-    for (const raw of Array.isArray(tags) ? tags : []) {
-      if (typeof raw !== "string" || !raw.trim()) continue;
-      const match = lookup.get(norm(raw));
-      if (match) {
-        push(canonical, match);
-        continue;
-      }
-      const clean = standardizeTag(raw) || raw.trim();
-      const cleanMatch = lookup.get(norm(clean));
-      if (cleanMatch) push(canonical, cleanMatch);
-      else leftovers.push(clean);
-    }
     const implies = {};
     for (const [name, targets] of Object.entries(dict.implications)) {
       if (name in dict.mapping) implies[name] = targets.map((t) => lookup.get(norm(t)) ?? t.trim());
     }
     const blocked = new Set(dict.removedTags.map(norm));
-    for (const tag of expandImplications([...canonical], implies, blocked)) push(canonical, tag);
-    // After the canonicals, so a tidied tag never duplicates one
-    for (const tag of leftovers) push(other, tag);
-    return { canonical, other };
+    return (tags) => {
+      const canonical = [];
+      const other = [];
+      const seen = new Set();
+      const push = (list, tag) => {
+        const key = foldTag(tag);
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        list.push(tag);
+      };
+      const leftovers = [];
+      for (const raw of Array.isArray(tags) ? tags : []) {
+        if (typeof raw !== "string" || !raw.trim()) continue;
+        const match = lookup.get(norm(raw));
+        if (match) {
+          push(canonical, match);
+          continue;
+        }
+        const clean = standardizeTag(raw) || raw.trim();
+        const cleanMatch = lookup.get(norm(clean));
+        if (cleanMatch) push(canonical, cleanMatch);
+        else leftovers.push(clean);
+      }
+      for (const tag of expandImplications([...canonical], implies, blocked)) push(canonical, tag);
+      // After the canonicals, so a tidied tag never duplicates one
+      for (const tag of leftovers) push(other, tag);
+      return { canonical, other };
+    };
   }
 
   // ── Apply plan ──
@@ -979,6 +990,7 @@ const CTM = (() => {
     bucketize,
     expandImplications,
     mapImportTags,
+    createImportMapper,
     planApply,
     trimEdit,
     buildBackup,

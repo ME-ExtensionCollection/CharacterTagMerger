@@ -451,6 +451,15 @@ describe("mapImportTags", () => {
     eq(CTM.mapImportTags(["drow"], dict), { canonical: ["Dark Elf", "Elf", "Fantasy"], other: [] });
   });
 
+  it("createImportMapper gives the same results for many cards", () => {
+    const map = CTM.createImportMapper(dict);
+    const cards = [["#female", "WOMAN", "demihuman"], ["drow"], ["dark knight", "NSFW"], []];
+    eq(
+      cards.map((tags) => map(tags)),
+      cards.map((tags) => CTM.mapImportTags(tags, dict)),
+    );
+  });
+
   it("keeps Removed tags (tidied) instead of dropping them", () => {
     eq(CTM.mapImportTags(["junk tag"], dict), { canonical: [], other: ["Junk Tag"] });
   });

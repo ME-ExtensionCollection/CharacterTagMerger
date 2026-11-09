@@ -3,7 +3,7 @@
   "version": 1,
   "config": {
     "name": "Tag Merger",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "Merge, rename and clean character tags across the whole library with a canonical tag dictionary. Compatible with the SillyTavern Character Tag Merger export format.",
     "runtime": "client",
     "capabilities": [
